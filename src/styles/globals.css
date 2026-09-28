@@ -1,0 +1,651 @@
+/**
+ * Global Styles - Design System
+ */
+
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@theme {
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+  --color-primary-800: #3730a3;
+  --color-primary-900: #312e81;
+  --color-primary-950: #1e1b4b;
+
+  --color-primary: #4f46e5;
+  --color-primary-dark: #4338ca;
+  --color-primary-light: #eef2ff;
+  --color-secondary: #7c3aed;
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  --color-success-50: #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+
+  --color-secondary-50: #f5f3ff;
+  --color-secondary-100: #ede9fe;
+  --color-secondary-500: #a855f7;
+  --color-secondary-600: #9333ea;
+
+  --animate-slide-in: slide-in 0.3s ease-out;
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-out: slide-out 0.2s ease-in;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-spin: spin 1s linear infinite;
+  --animate-bounce: bounce 1s infinite;
+  --animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(-25%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+@utility animate-slide-in {
+  animation: var(--animate-slide-in);
+}
+@utility animate-fade-in {
+  animation: var(--animate-fade-in);
+}
+@utility animate-slide-out {
+  animation: var(--animate-slide-out);
+}
+@utility animate-pulse {
+  animation: var(--animate-pulse);
+}
+@utility animate-spin {
+  animation: var(--animate-spin);
+}
+@utility animate-bounce {
+  animation: var(--animate-bounce);
+}
+@utility animate-ping {
+  animation: var(--animate-ping);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #f8fafc;
+  color: #1f2937;
+  line-height: 1.5;
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Layout */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  @apply fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 flex flex-col transition-all duration-200;
+}
+
+.sidebar.collapsed {
+  width: 72px;
+}
+
+.sidebar.hidden {
+  transform: translateX(-100%);
+}
+
+.sidebar-header {
+  @apply flex items-center justify-between h-16 px-4 border-b border-gray-200;
+}
+
+.sidebar-brand {
+  @apply flex items-center gap-3 min-w-0;
+}
+
+.sidebar-logo {
+  @apply w-10 h-10 flex-shrink-0;
+}
+
+.brand-bg {
+  @apply fill-primary;
+}
+
+.brand-text {
+  @apply fill-white font-bold text-[18px];
+}
+
+.sidebar-title {
+  @apply flex flex-col min-w-0 overflow-hidden;
+}
+
+.sidebar-title strong {
+  @apply text-gray-900 truncate block;
+}
+
+.sidebar-title span {
+  @apply text-xs text-gray-500 truncate block;
+}
+
+.sidebar-toggle {
+  @apply p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors;
+}
+
+.sidebar-nav {
+  @apply flex-1 overflow-y-auto py-4 px-2;
+}
+
+.sidebar-nav ul {
+  @apply space-y-1;
+}
+
+.nav-link {
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors;
+}
+
+.nav-link.active {
+  @apply bg-primary-50 text-primary-700 font-medium;
+}
+
+.nav-link svg {
+  @apply flex-shrink-0 w-5 h-5;
+}
+
+.nav-divider {
+  @apply border-t border-gray-200 my-3;
+}
+
+.sidebar-footer {
+  @apply p-4 border-t border-gray-200;
+}
+
+.user-info {
+  @apply flex items-center gap-3;
+}
+
+.user-avatar {
+  @apply w-10 h-10 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-semibold text-sm;
+}
+
+.user-details {
+  @apply flex flex-col min-w-0;
+}
+
+.user-details strong {
+  @apply text-gray-900 truncate block text-sm;
+}
+
+.user-details span {
+  @apply text-xs text-gray-500 truncate block;
+}
+
+.logout-btn {
+  @apply ml-auto p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors;
+}
+
+.sidebar-overlay {
+  @apply fixed inset-0 bg-black/50 z-30 opacity-0 invisible transition-opacity;
+}
+
+/* The overlay is only a dismiss target for the mobile drawer. On desktop the
+   sidebar is always docked, so showing it would block the whole app. */
+.sidebar-overlay.visible {
+  @apply opacity-0 invisible;
+}
+
+@media (max-width: 1023px) {
+  .sidebar-overlay.visible {
+    @apply opacity-100 visible;
+  }
+
+  .sidebar {
+    @apply w-72;
+  }
+
+  .sidebar.hidden {
+    transform: translateX(-100%);
+  }
+
+  .main-content,
+  .sidebar.collapsed + .main-content {
+    margin-left: 0;
+  }
+}
+
+.main-content {
+  @apply flex-1 min-h-screen bg-gray-50 transition-all duration-200 ml-64;
+}
+
+.sidebar.collapsed + .main-content {
+  margin-left: 72px;
+}
+
+.topbar {
+  @apply sticky top-0 z-20 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4;
+}
+
+.mobile-menu-btn {
+  @apply lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100;
+}
+
+.topbar-search {
+  @apply flex-1 max-w-md;
+}
+
+.search-input {
+  @apply w-full px-4 py-2 pl-10 rounded-lg border border-gray-300 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white;
+}
+
+.topbar-actions {
+  @apply flex items-center gap-3;
+}
+
+.demo-badge {
+  @apply px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full;
+}
+
+.page-header {
+  @apply mb-8;
+}
+
+.page-header h1 {
+  @apply text-2xl font-bold text-gray-900;
+}
+
+.page-header p {
+  @apply text-gray-500 mt-1;
+}
+
+.metrics-grid {
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8;
+}
+
+.metric-card {
+  @apply rounded-xl border p-5;
+}
+
+.dashboard-grid {
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-6;
+}
+
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-200;
+}
+
+.card-header {
+  @apply px-6 py-4 border-b border-gray-200 flex items-center justify-between;
+}
+
+.card-header h3 {
+  @apply text-lg font-semibold text-gray-900;
+}
+
+.card-content {
+  @apply p-6;
+}
+
+.empty-state {
+  @apply text-center py-12;
+}
+
+.empty-state p {
+  @apply text-gray-500 mb-4;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 px-4 py-2;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-900 hover:bg-gray-200 focus:ring-gray-500 px-4 py-2;
+}
+
+.btn-ghost {
+  @apply bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500 px-4 py-2;
+}
+
+.btn-danger {
+  @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 px-4 py-2;
+}
+
+.btn-sm {
+  @apply px-3 py-1.5 text-sm;
+}
+
+.btn-lg {
+  @apply px-6 py-3 text-lg;
+}
+
+.btn-block {
+  @apply w-full;
+}
+
+.form-field {
+  @apply mb-4;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+.form-label-row {
+  @apply flex items-center justify-between mb-1;
+}
+
+.input-wrapper {
+  @apply relative;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  @apply w-full px-4 py-2.5 rounded-lg border border-gray-300 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white transition-shadow;
+}
+
+.form-input.error,
+.form-select.error,
+.form-textarea.error {
+  @apply border-red-300 focus:ring-red-500;
+}
+
+.form-textarea {
+  @apply min-h-[100px] resize-y;
+}
+
+.form-error {
+  @apply mt-1.5 text-sm text-red-600;
+}
+
+.form-hint {
+  @apply mt-1.5 text-sm text-gray-500;
+}
+
+.password-input {
+  @apply relative;
+}
+
+.password-input input {
+  @apply pr-12;
+}
+
+.password-toggle {
+  @apply absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1;
+}
+
+.login-page {
+  @apply min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12;
+}
+
+.login-container {
+  @apply w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-200 p-8;
+}
+
+.login-brand {
+  @apply text-center mb-8;
+}
+
+.login-logo {
+  @apply w-20 h-20 mx-auto mb-4 relative;
+}
+
+.login-brand h1 {
+  @apply text-2xl font-bold text-gray-900;
+}
+
+.login-brand p {
+  @apply text-gray-500 mt-1;
+}
+
+.login-form {
+  @apply space-y-5;
+}
+
+.form-group {
+  @apply space-y-1.5;
+}
+
+.password-input {
+  @apply relative;
+}
+
+.password-toggle {
+  @apply absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600;
+}
+
+.alert {
+  @apply flex items-center gap-2 p-3 rounded-lg text-sm;
+}
+
+.alert-error {
+  @apply bg-red-50 border border-red-200 text-red-700;
+}
+
+.form-row {
+  @apply flex gap-4;
+}
+
+.form-row > * {
+  @apply flex-1;
+}
+
+.demo-hint {
+  @apply mt-8 p-4 bg-gray-50 rounded-lg text-sm;
+}
+
+.demo-hint strong {
+  @apply block text-gray-900 mb-2;
+}
+
+.demo-hint ul {
+  @apply space-y-1;
+}
+
+.demo-hint li {
+  @apply text-gray-600;
+}
+
+.badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-primary {
+  @apply bg-primary-100 text-primary-700;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-700;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-700;
+}
+
+.badge-danger {
+  @apply bg-red-100 text-red-700;
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+.toast-container {
+  @apply fixed bottom-4 right-4 z-50 flex flex-col gap-2;
+}
+
+.toast {
+  @apply flex items-start gap-3 p-4 rounded-lg shadow-lg border min-w-[300px] max-w-md animate-slide-in;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full hover:bg-gray-400;
+}
+
+/* Selection */
+::selection {
+  @apply bg-primary-200 text-primary-900;
+}
+
+/* Focus visible */
+:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+}
+
+/* Animations */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Print styles */
+@media print {
+  .sidebar,
+  .topbar,
+  .btn,
+  .sidebar-overlay,
+  .mobile-menu-btn {
+    display: none !important;
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+  }
+
+  body {
+    background: white !important;
+  }
+}
