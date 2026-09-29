@@ -5,15 +5,33 @@
  */
 
 import type { Appointment, Evolution, Patient, Professional, Service, UUID } from '../domain/types';
+import { gerarHashSenha, serializarHash } from './CryptoService';
 import {
   appointmentRepository,
+  configRepository,
+  consentRepository,
   evolutionRepository,
   patientRepository,
   professionalRepository,
   serviceRepository,
 } from '../repositories';
+import { storage } from '../adapters';
+import { buildConsentVars, renderConsentText } from './ConsentService';
+import { TREATMENT_CONSENT } from '../repositories/ConfigRepository';
 
 const id = (value: string) => value as UUID;
+
+/**
+ * Marcador de primeira execucao.
+ *
+ * Sem ele, apagar a equipe ou os consentimentos e recarregar a pagina trazia
+ * Ana/Marcos e a demo de volta, porque o bootstrap so olhava se a colecao
+ * estava vazia. Isso impedia tanto o modo homologacao (que depende de a equipe
+ * padrao continuar removida) quanto o login de ambiente vazio. Agora a semeadura
+ * acontece uma vez por navegador; depois disso, o que o usuario apagou fica
+ * apagado.
+ */
+const BOOTSTRAP_FLAG = 'bootstrap';
 
 const PROFESSIONALS: Professional[] = [
   {
@@ -25,6 +43,7 @@ const PROFESSIONALS: Professional[] = [
     role: 'Psicóloga',
     active: true,
     admin: true,
+    demo: true,
     createdAt: '2026-01-05T09:00:00.000Z',
     updatedAt: '2026-01-05T09:00:00.000Z',
   },
@@ -37,6 +56,7 @@ const PROFESSIONALS: Professional[] = [
     role: 'Psicólogo',
     active: true,
     admin: false,
+    demo: true,
     createdAt: '2026-01-05T09:05:00.000Z',
     updatedAt: '2026-01-05T09:05:00.000Z',
   },
@@ -133,6 +153,30 @@ function at(dayOffset: number, hour: number, minute = 0): string {
   return d.toISOString();
 }
 
+/**
+ * Consentimentos de demonstracao: um titular e um responsavel, como na POC.
+ * O texto ja vem congelado, porque um termo assinado nao muda quando o modelo
+ * e editado depois.
+ */
+const CONSENTS = [
+  {
+    paciente: PATIENTS[0],
+    tipo: 'treatment' as const,
+    assinadoPor: PATIENTS[0].name,
+    relacao: 'holder' as const,
+    assinadoEm: '2026-07-14T14:00:00.000Z',
+    registradoPor: PROFESSIONALS[0],
+  },
+  {
+    paciente: PATIENTS[1],
+    tipo: 'treatment' as const,
+    assinadoPor: 'Carla Lima',
+    relacao: 'guardian' as const,
+    assinadoEm: '2026-08-05T10:30:00.000Z',
+    registradoPor: PROFESSIONALS[1],
+  },
+];
+
 const APPOINTMENTS: Appointment[] = [
   {
     id: id('cccccccc-cccc-4ccc-8ccc-ccccccccccc1'),
@@ -207,14 +251,95 @@ const EVOLUTIONS: Evolution[] = [
 
 let bootstrapPromise: Promise<void> | null = null;
 
-async function seedIfEmpty(): Promise<void> {
-  if ((await professionalRepository.count()) > 0) return;
+/**
+ * Garante que as credenciais de demonstração existam.
+ *
+ * Motivo: installs antigos (ou uma base restaurada de outra máquina) podem ter
+ * a coleção de profissionais vazia ou sem e-mail/senha. Nesses casos o login
+ * falhava sempre e não havia caminho para se recuperar pela interface.
+ */
+async function ensureDemoProfessionals(forcar = false): Promise<void> {
+  if (!forcar) return;
+  const usable = await professionalRepository.hasUsableCredentials();
+  const missing = usable
+    ? await Promise.all(
+        PROFESSIONALS.map(async (p) => ((await professionalRepository.findByEmail(p.email)) ? null : p))
+      ).then((list) => list.filter((p): p is Professional => p !== null))
+    : PROFESSIONALS;
 
+  if (missing.length > 0) {
+    // Os acessos de demonstracao tambem entram guardados como hash. A senha do
+    // seed continua visivel no codigo (ela e de demonstracao, e precisa ser
+    // conhecida para o primeiro acesso), mas o que fica no armazenamento e o
+    // derivado, igual ao de qualquer usuario cadastrado.
+    await professionalRepository.createMany(
+      await Promise.all(
+        missing.map(async (p) => {
+          const { password, ...resto } = p;
+          return {
+            ...resto,
+            passwordHash: serializarHash(await gerarHashSenha(password || '')),
+          } as unknown as Professional;
+        })
+      )
+    );
+    console.info(
+      `[bootstrap] ${missing.length} profissional(is) de demonstração criado(s): ` +
+        missing.map((p) => p.email).join(', ')
+    );
+  }
+}
+
+async function seedConsents(forcar = false): Promise<void> {
+  if (!forcar && (await consentRepository.count()) > 0) return;
+  if (forcar) await storage.remove('consents');
+
+  const config = await configRepository.get();
+  for (const c of CONSENTS) {
+    const vars = buildConsentVars(c.paciente, config, c.registradoPor, c.assinadoPor);
+    await consentRepository.saveWithChecks({
+      patientId: c.paciente.id as string,
+      type: c.tipo,
+      signedBy: c.assinadoPor,
+      relationship: c.relacao,
+      document: c.paciente.document || '',
+      signedAt: c.assinadoEm,
+      version: config.consent?.models?.treatment?.version || '1.0',
+      registeredBy: c.registradoPor.id as string,
+      text: renderConsentText(TREATMENT_CONSENT, vars),
+    });
+  }
+}
+
+/**
+ * Recria a clinica de demonstracao do zero. Usado pelo botao
+ * "Restaurar demonstracao" da aba Dados, depois de limpar o storage.
+ */
+export async function seedDemoData(): Promise<void> {
   await serviceRepository.createMany(SERVICES);
-  await professionalRepository.createMany(PROFESSIONALS);
   await patientRepository.createMany(PATIENTS);
   await appointmentRepository.createMany(APPOINTMENTS);
   await evolutionRepository.createMany(EVOLUTIONS);
+  await ensureDemoProfessionals(true);
+  await seedConsents(true);
+}
+
+async function seedIfEmpty(): Promise<void> {
+  const jaSemeou = (await storage.get<{ concluido?: boolean }>(BOOTSTRAP_FLAG))?.concluido === true;
+  if (jaSemeou) return;
+
+  const isEmpty = (await professionalRepository.count()) === 0;
+
+  if (isEmpty) {
+    await serviceRepository.createMany(SERVICES);
+    await patientRepository.createMany(PATIENTS);
+    await appointmentRepository.createMany(APPOINTMENTS);
+    await evolutionRepository.createMany(EVOLUTIONS);
+  }
+
+  await ensureDemoProfessionals(true);
+  await seedConsents(true);
+  await storage.set(BOOTSTRAP_FLAG, { concluido: true, em: new Date().toISOString() });
 }
 
 /**

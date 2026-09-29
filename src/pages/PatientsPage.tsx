@@ -1,113 +1,178 @@
-import { useUI } from '../store';
-import { Button, Input, Badge } from '../components/ui';
-import { Edit, Trash2 } from 'lucide-react';
-import { patientRepository } from '../repositories';
-import { useCallback, useState, useEffect } from 'react';
+import { useUI, useData, useAuth } from '../store';
+import { patientRepository, serviceRepository } from '../repositories';
+import { pacientesVisiveis } from '../services/AccessService';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { Patient, Service } from '../domain/types';
+
+function initials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+}
+
+function idade(birthDate?: string): number | null {
+  if (!birthDate) return null;
+  const born = new Date(birthDate);
+  if (Number.isNaN(born.getTime())) return null;
+  const now = new Date();
+  let years = now.getFullYear() - born.getFullYear();
+  const m = now.getMonth() - born.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < born.getDate())) years--;
+  return years;
+}
+
+function statusBadge(status: string) {
+  if (status === 'active') return <span className="badge badge-success">Em tratamento</span>;
+  if (status === 'paused') return <span className="badge badge-warn">Pausado</span>;
+  return <span className="badge">Encerrado</span>;
+}
 
 export function PatientsPage() {
+  const navigate = useNavigate();
   const { addToast } = useUI();
-  const [patients, setPatients] = useState<any[]>([]);
+  const { patientsFilter, setPatientsFilter } = useData();
+  const { professional: me, isAdmin } = useAuth();
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [evolutionCount, setEvolutionCount] = useState<Record<string, { count: number; lastDate?: string }>>({});
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
 
   const loadPatients = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await patientRepository.findAll({ limit: 50 });
-      setPatients(data);
+      const [data, svc] = await Promise.all([
+        patientRepository.findWithEvolutionCount(),
+        serviceRepository.findActive(),
+      ]);
+      // Quem nao administra so enxerga os pacientes sob a responsabilidade dele
+      // e os que ainda nao tem responsavel definido.
+      const visiveis = pacientesVisiveis(
+        data.map((d) => d.patient),
+        me,
+        isAdmin
+      );
+      setPatients(visiveis);
+      setEvolutionCount(
+        Object.fromEntries(data.map((d) => [d.patient.id, { count: d.count, lastDate: d.lastDate }]))
+      );
+      setServices(svc);
     } catch (e) {
       console.error('Failed to load patients:', e);
       addToast({ type: 'error', message: 'Erro ao carregar pacientes' });
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, me, isAdmin]);
 
-  useEffect(() => { loadPatients(); }, [loadPatients]);
+  useEffect(() => {
+    loadPatients();
+  }, [loadPatients]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este paciente?')) return;
-    try {
-      await patientRepository.delete(id);
-      addToast({ type: 'success', message: 'Paciente excluído' });
-      loadPatients();
-    } catch {
-      addToast({ type: 'error', message: 'Erro ao excluir paciente' });
-    }
-  };
+  const search = patientsFilter.search || '';
+  const serviceFilter = patientsFilter.serviceId || 'all';
 
-  const filtered = patients.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.phone?.includes(search) ||
-    p.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = patients.filter((p) => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      (p.phone || '').includes(q) ||
+      (p.email || '').toLowerCase().includes(q);
+    const matchesService = serviceFilter === 'all' || p.serviceId === serviceFilter;
+    return matchesSearch && matchesService;
+  });
+
+  const serviceLabel = (id: string) => services.find((s) => s.id === id)?.name || 'Sem serviço';
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1>Pacientes</h1>
-        <p>Cadastro e acompanhamento</p>
+    <div>
+      <div className="row-between" style={{ marginBottom: 16 }}>
+        <div className="search grow" style={{ maxWidth: 320 }}>
+          <input
+            type="search"
+            placeholder="Buscar por nome, telefone ou email..."
+            aria-label="Buscar por nome, telefone ou email"
+            value={search}
+            onChange={(e) => setPatientsFilter({ search: e.target.value })}
+          />
+        </div>
       </div>
 
-      <div className="flex justify-between mb-6">
-        <Input
-          placeholder="Buscar por nome, telefone ou email..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-80"
-        />
-        <Button onClick={() => {}}>+ Novo Paciente</Button>
+      <div className="chip-bar">
+        <button
+          className={`chip ${serviceFilter === 'all' ? 'active' : ''}`}
+          onClick={() => setPatientsFilter({ serviceId: 'all' })}
+        >
+          Todos
+        </button>
+        {services.map((s) => (
+          <button
+            key={s.id}
+            className={`chip ${serviceFilter === s.id ? 'active' : ''}`}
+            onClick={() => setPatientsFilter({ serviceId: s.id })}
+          >
+            {s.name}
+          </button>
+        ))}
       </div>
 
-      <div className="card">
-        <div className="card-content">
-          {loading ? (
-            <div className="text-center py-8">Carregando...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm" role="table">
-                <thead>
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">E-mail</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center text-gray-500">
-                        Nenhum registro encontrado
-                      </td>
-                    </tr>
-                  ) : (
-                    <>
-                      {filtered.map((row) => {
-                        return (
-                          <tr key={row.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3">{row.name}</td>
-                            <td className="px-4 py-3">{row.phone}</td>
-                            <td className="px-4 py-3">{row.email}</td>
-                            <td className="px-4 py-3"><Badge variant={row.status === 'active' ? 'success' : 'default'}>{row.status}</Badge></td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex gap-2 justify-end">
-                                <Button variant="ghost" size="sm" onClick={() => {}}><Edit className="w-4 h-4" /></Button>
-                                <Button variant="danger" size="sm" onClick={() => handleDelete(row.id)}><Trash2 className="w-4 h-4" /></Button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </>
-                  )}
-                  </tbody>
-                </table>
+      {loading ? (
+        <div className="card">
+          <div className="empty small">Carregando…</div>
+        </div>
+      ) : filtered.length ? (
+        <div className="grid-cards">
+          {filtered.map((p) => (
+            <div
+              key={p.id}
+              className="card patient-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/patients/${p.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate(`/patients/${p.id}`);
+                }
+              }}
+            >
+              <div className="pc-top">
+                <div className="avatar avatar-lg">{initials(p.name)}</div>
+                <div>
+                  <div className="pc-name">{p.name}</div>
+                  <div className="pc-meta">
+                    {p.phone || 'Sem telefone'}
+                    {idade(p.birthDate) !== null && ` · ${idade(p.birthDate)} anos`}
+                  </div>
+                </div>
               </div>
-            )}
+              <div className="pc-foot">
+                <span className="badge badge-primary">{serviceLabel(p.serviceId)}</span>
+                {statusBadge(p.status)}
+              </div>
+              <div className="pc-meta">
+                {evolutionCount[p.id]?.count
+                  ? `${evolutionCount[p.id].count} evolução(ões) · última em ${new Date(
+                      evolutionCount[p.id].lastDate as string
+                    ).toLocaleDateString('pt-BR')}`
+                  : 'Nenhuma evolução registrada'}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card">
+          <div className="empty">
+            <div className="ico">☺</div>
+            <h4>Nenhum paciente encontrado</h4>
+            <p>Ajuste a busca ou cadastre um novo paciente.</p>
           </div>
         </div>
+      )}
     </div>
   );
 }

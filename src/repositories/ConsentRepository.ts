@@ -51,6 +51,64 @@ export class ConsentRepository extends BaseRepository<Consent> {
     });
   }
 
+  /**
+   * Registra a assinatura de um termo, como a POC.
+   * Bloqueia quando ja existe termo vigente do mesmo tipo, a menos que o
+   * usuario marque a substituicao - nesse caso o anterior vira 'replaced'
+   * e continua no historico para comprovacao.
+   */
+  async saveWithChecks(
+    data: {
+      patientId: string;
+      type: 'treatment' | 'data';
+      signedBy: string;
+      relationship: 'holder' | 'guardian';
+      document: string;
+      signedAt: string;
+      version: string;
+      registeredBy: string;
+      text: string;
+    },
+    substituir = false
+  ): Promise<{ ok: boolean; error?: string; consent?: any }> {
+    if (!data.patientId) return { ok: false, error: 'Selecione o paciente.' };
+    if (!String(data.signedBy || '').trim()) {
+      return { ok: false, error: 'Informe quem assinou o termo.' };
+    }
+
+    const vigente = await this.findVigent(data.patientId, data.type);
+    if (vigente && !substituir) {
+      return {
+        ok: false,
+        error: 'Já existe um termo vigente deste tipo. Revogue o anterior ou marque a substituição.',
+      };
+    }
+
+    if (vigente) {
+      await this.update(vigente.id, {
+        status: 'replaced',
+        revokedAt: new Date().toISOString(),
+        revocationReason: 'Substituído por nova versão',
+      });
+    }
+
+    const created = await this.create({
+      patientId: data.patientId as any,
+      type: data.type,
+      signedBy: String(data.signedBy).trim(),
+      relationship: data.relationship,
+      document: String(data.document || '').trim(),
+      signedAt: new Date(data.signedAt || Date.now()).toISOString(),
+      version: data.version || '1.0',
+      registeredBy: data.registeredBy as any,
+      text: data.text,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    } as any);
+
+    return { ok: true, consent: created };
+  }
+
   async replace(id: string, newConsent: any): Promise<any> {
     const old = await this.findById(id);
     if (!old) throw new Error('Consent not found');
@@ -77,13 +135,12 @@ export class ConsentRepository extends BaseRepository<Consent> {
   async getPendingCount(): Promise<number> {
     // Patients without active consent
     const { patientRepository } = await import('./PatientRepository');
-    const { consentRepository } = await import('./ConsentRepository');
 
     const patients = await patientRepository.findAll({ where: { status: 'active' } });
     let pending = 0;
 
     for (const patient of patients) {
-      const active = await consentRepository.findActive(patient.id);
+      const active = await this.findActive(patient.id);
       if (active.length === 0) pending++;
     }
 

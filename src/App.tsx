@@ -8,6 +8,8 @@ import { useAuth, useConfig, useUI } from './store';
 import { ClinicProvider } from './context/ClinicContext';
 import { ToastContainer, ModalPortal } from './components/ui';
 import { Layout } from './components/layout/Layout';
+import { ModalRouter, ModalTitle } from './components/modal/ModalRouter';
+import { Tour } from './components/onboarding/Tour';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PatientsPage } from './pages/PatientsPage';
@@ -17,11 +19,18 @@ import { ServicesPage } from './pages/ServicesPage';
 import { AgendaPage } from './pages/AgendaPage';
 import { LGPDPage } from './pages/LGPDPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { AjudaPage } from './pages/AjudaPage';
 import { AdminPage } from './pages/AdminPage';
 import './styles/globals.css';
 
-function ProtectedRoute({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
-  const { isAuthenticated, isAdmin, checkAuth } = useAuth();
+/**
+ * So exige sessao. `/admin` nao e mais restrito a administradores: quem nao e
+ * administrador entra na tela, mas so enxerga as abas "Meu acesso" e "Dados".
+ * O filtro acontece em `AdminPage`, que nao renderiza o corpo das abas
+ * restritas - esconder o botao sozinho nao impede a aba de abrir.
+ */
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { isAuthenticated, checkAuth } = useAuth();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -44,10 +53,6 @@ function ProtectedRoute({ children, adminOnly = false }: { children: ReactNode; 
     return <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && !isAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   return <>{children}</>;
 }
 
@@ -65,7 +70,8 @@ function AppRoutes() {
         <Route path="/agenda" element={<AgendaPage />} />
         <Route path="/lgpd" element={<LGPDPage />} />
         <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+        <Route path="/ajuda" element={<AjudaPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -90,9 +96,10 @@ function App() {
         <div className="app">
           <AppRoutes />
           <ToastContainer toasts={toasts} onRemove={removeToast} />
+          <Tour />
           {activeModal && (
-            <ModalPortal isOpen onClose={closeModal} title={modalProps?.title} size={modalProps?.size}>
-              {modalProps?.content}
+            <ModalPortal isOpen onClose={closeModal} title={<ModalTitle />} size={modalProps?.size}>
+              <ModalRouter />
             </ModalPortal>
           )}
         </div>

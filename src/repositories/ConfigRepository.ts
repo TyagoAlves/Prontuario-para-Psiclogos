@@ -1,4 +1,4 @@
-import type { AppConfig, ConsentModel } from '../domain/types';
+import type { AppConfig, ConsentModel, ConsentModels } from '../domain/types';
 import { storage } from '../adapters';
 
 const CONFIG_KEY = 'config';
@@ -25,7 +25,7 @@ type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
 };
 
-const TREATMENT_CONSENT: ConsentModel = {
+export const TREATMENT_CONSENT: ConsentModel = {
   label: 'Termo de Consentimento para Tratamento Psicológico',
   title: 'Termo de Consentimento para Tratamento Psicológico',
   version: '1.0',
@@ -44,7 +44,7 @@ const TREATMENT_CONSENT: ConsentModel = {
   ],
 };
 
-const DATA_CONSENT: ConsentModel = {
+export const DATA_CONSENT: ConsentModel = {
   label: 'Termo de Consentimento para Uso de Dados (LGPD)',
   title: 'Termo de Consentimento para Uso de Dados',
   version: '1.0',
@@ -95,8 +95,15 @@ function getDefaults(): AppConfig {
       },
     },
     demo: true,
+    homologacao: false,
   };
 }
+
+/** Modelos de termo originais, usados pelo botao "Restaurar modelos". */
+export const DEFAULT_CONSENT_MODELS: ConsentModels = {
+  treatment: TREATMENT_CONSENT,
+  data: DATA_CONSENT,
+};
 
 export class ConfigRepository {
   private storage = storage;
@@ -135,6 +142,14 @@ export class ConfigRepository {
     const defaults = getDefaults();
     await this.storage.set(this.key, defaults);
     return defaults;
+  }
+
+  async setHomologacao(value: boolean): Promise<AppConfig> {
+    return this.set({ homologacao: value });
+  }
+
+  async isHomologacao(): Promise<boolean> {
+    return (await this.get()).homologacao === true;
   }
 
   async isDemo(): Promise<boolean> {

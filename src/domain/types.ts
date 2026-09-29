@@ -59,17 +59,32 @@ export interface AppConfig {
   texts: TextConfig;
   consent: ConsentConfig;
   demo: boolean;
+  /**
+   * Ambiente de teste. Entra em vigor quando os acessos padrao de
+   * demonstracao saem da equipe: o aviso fica visivel e as acoes que
+   * apagam dados deixam de pedir confirmacao extra.
+   */
+  homologacao: boolean;
 }
 
 export interface Professional {
   id: UUID;
   name: string;
   email: string;
-  password: string; // hashed in production
+  /**
+   * Derivado da senha (PBKDF2-HMAC-SHA256 com sal), nunca a senha em si.
+   * Campo novo; o `password` abaixo existe so para os acessos gravados antes
+   * do hash existir e e apagado no primeiro login bem-sucedido.
+   */
+  passwordHash?: string;
+  /** @deprecated senha em texto puro. Legado: migrada no login. */
+  password?: string;
   crp: string;
   role: string;
   active: boolean;
   admin: boolean;
+  /** Acesso criado automaticamente como demonstracao (nao e da clinica). */
+  demo?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +92,11 @@ export interface Professional {
 export interface Patient {
   id: UUID;
   name: string;
+  /**
+   * Profissional sob cuja responsabilidade o paciente esta. Opcional: os
+   * cadastros antigos nao tem, e continuam visiveis para todo mundo.
+   */
+  professionalId?: UUID;
   phone: string;
   email: string;
   birthDate: string;

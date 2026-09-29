@@ -15,6 +15,17 @@ export class ClinicService {
     return configRepository.updateClinic(data);
   }
 
+  /**
+   * Grava um pedaco qualquer da configuracao (clinica, marca, textos, termos).
+   *
+   * updateClinic acima so serve para a aba de identidade: ele embrulha o que
+   * recebe dentro de `clinic`, entao mandar marca ou textos por ele os grava
+   * no lugar errado e o cadastro inicial da clinica ficava sem nome.
+   */
+  async updateConfig(data: Record<string, unknown>): Promise<AppConfig> {
+    return configRepository.set(data as Parameters<typeof configRepository.set>[0]);
+  }
+
   async updateBrand(data: Partial<any>): Promise<any> {
     return configRepository.updateBrand(data);
   }
@@ -29,6 +40,14 @@ export class ClinicService {
 
   async resetToDefaults(): Promise<any> {
     return configRepository.resetToDefaults();
+  }
+
+  async setHomologacao(value: boolean): Promise<void> {
+    await configRepository.setHomologacao(value);
+  }
+
+  async isHomologacao(): Promise<boolean> {
+    return configRepository.isHomologacao();
   }
 
   async isDemo(): Promise<boolean> {

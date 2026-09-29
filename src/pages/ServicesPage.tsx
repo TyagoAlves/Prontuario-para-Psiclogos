@@ -1,18 +1,22 @@
 import { useUI } from '../store';
-import { Button } from '../components/ui';
-import { Plus } from 'lucide-react';
 import { serviceRepository } from '../repositories';
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { Service } from '../domain/types';
+
+const SERVICE_STATUS: Record<string, { label: string; className: string }> = {
+  active: { label: 'Ativo', className: 'badge-success' },
+  inactive: { label: 'Inativo', className: '' },
+};
 
 export function ServicesPage() {
-  const { addToast } = useUI();
-  const [services, setServices] = useState<any[]>([]);
+  const { addToast, openModal } = useUI();
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadServices = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await serviceRepository.findAll({ limit: 100 });
+      const data = await serviceRepository.findAll({ orderBy: 'name', orderDir: 'asc' });
       setServices(data);
     } catch (e) {
       console.error('Failed to load services:', e);
@@ -22,57 +26,71 @@ export function ServicesPage() {
     }
   }, [addToast]);
 
-  useEffect(() => { loadServices(); }, [loadServices]);
+  useEffect(() => {
+    loadServices();
+  }, [loadServices]);
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1>Serviços</h1>
-        <p>Crie, altere e desative os tipos de atendimento</p>
-      </div>
-
-      <div className="flex justify-between mb-6">
-        <Button onClick={() => {}}><Plus className="w-4 h-4 mr-2" /> Novo Serviço</Button>
+    <div>
+      <div className="row-between" style={{ marginBottom: 16 }}>
+        <span className="muted small">
+          {services.length} serviço(s) cadastrado(s)
+        </span>
+        <button className="btn btn-primary" onClick={() => openModal('new-service', { onSaved: loadServices })}>
+          + Novo serviço
+        </button>
       </div>
 
       <div className="card">
-        <div className="card-content">
-          {loading ? (
-            <div className="text-center py-8">Carregando...</div>
-          ) : services.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Nenhum serviço cadastrado</p>
-              <Button onClick={() => {}} className="mt-4"><Plus className="w-4 h-4 mr-2" /> Criar primeiro serviço</Button>
-            </div>
-          ) : (
-            <table className="w-full text-sm">
+        {loading ? (
+          <div className="empty small">Carregando…</div>
+        ) : services.length === 0 ? (
+          <div className="empty">
+            <div className="ico">✦</div>
+            <h4>Nenhum serviço cadastrado</h4>
+            <p>Crie o primeiro tipo de atendimento da clínica.</p>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data">
               <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duração</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cor</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
+                <tr>
+                  <th>Serviço</th>
+                  <th>Duração</th>
+                  <th>Status</th>
+                  <th />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {services.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">{s.name}</td>
-                    <td className="px-4 py-3">{s.durationMin} min</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-block w-4 h-4 rounded" style={{ backgroundColor: s.color === 'primary' ? '#4f46e5' : s.color === 'success' ? '#059669' : s.color === 'warning' ? '#d97706' : '#dc2626' }} />
-                    </td>
-                    <td className="px-4 py-3"><span className={`badge ${s.active ? 'success' : 'default'}`}>{s.active ? 'Ativo' : 'Inativo'}</span></td>
-                    <td className="px-4 py-3 text-right">
-                      <button className="text-primary-600 hover:underline">Editar</button>
-                    </td>
-                  </tr>
-                ))}
+              <tbody>
+                {services.map((s) => {
+                  const status = SERVICE_STATUS[s.active ? 'active' : 'inactive'];
+                  return (
+                    <tr key={s.id}>
+                      <td>
+                        <strong>{s.name}</strong>
+                        {s.description && <div className="small muted">{s.description}</div>}
+                      </td>
+                      <td className="nowrap">{s.durationMin} min</td>
+                      <td>
+                        <span className={`badge ${status.className}`}>{status.label}</span>
+                      </td>
+                      <td>
+                        <div className="td-actions">
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => openModal('new-service', { service: s, onSaved: loadServices })}
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

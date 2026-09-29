@@ -1,11 +1,24 @@
 /**
- * Main Layout with Sidebar
+ * Main Layout - shell alinhado com a POC (sidebar escura + topbar)
  */
 
-import { useState, type ReactElement } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useUI, useAuth, useConfig } from '../../store';
-import { LogOut, ChevronLeft, ChevronRight, Menu as MenuIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useUI, useAuth, useConfig, useData } from '../../store';
+import {
+  Calendar,
+  FileText,
+  HelpCircle,
+  LayoutDashboard,
+  LogOut,
+  Menu as MenuIcon,
+  Settings,
+  Shield,
+  Stethoscope,
+  Users,
+  Circle,
+  type LucideIcon,
+} from 'lucide-react';
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Painel', icon: 'LayoutDashboard' },
@@ -14,157 +27,204 @@ const NAV_ITEMS = [
   { path: '/services', label: 'Serviços', icon: 'Stethoscope' },
   { path: '/lgpd', label: 'LGPD', icon: 'Shield' },
   { path: '/reports', label: 'Relatórios', icon: 'FileText' },
+  { path: '/ajuda', label: 'Ajuda', icon: 'HelpCircle' },
 ] as const;
 
 const ADMIN_NAV = { path: '/admin', label: 'Configurações', icon: 'Settings' };
 
+const TITLES: Record<string, [string, string]> = {
+  '/dashboard': ['Painel', 'Visão geral da clínica'],
+  '/patients': ['Pacientes', 'Cadastro e acompanhamento'],
+  '/patients/': ['Prontuário do paciente', 'Dados cadastrais, evoluções e termos LGPD'],
+  '/evolution': ['Registro de evolução', 'Escreva, salve e gere o PDF'],
+  '/services': ['Serviços', 'Crie, altere e desative os tipos de atendimento'],
+  '/agenda': ['Agenda', 'Agendamento de sessões por dia'],
+  '/lgpd': ['LGPD', 'Consentimentos e privacidade de dados'],
+  '/reports': ['Relatórios', 'Documentos prontos para gerar em PDF'],
+  '/ajuda': ['Ajuda', 'Como usar o sistema, área por área'],
+  '/admin': ['Configurações', 'Identidade, textos, termos, equipe e dados'],
+  '/admin-restrito': ['Configurações', 'Seus dados e backup do sistema'],
+};
+
+function resolveTitle(pathname: string, isAdmin: boolean): [string, string] {
+  // na mesma rota, quem nao administra ve outra legenda
+  if (pathname === '/admin') return isAdmin ? TITLES['/admin'] : TITLES['/admin-restrito'];
+  if (TITLES[pathname]) return TITLES[pathname];
+  if (pathname.startsWith('/patients/')) return TITLES['/patients/'];
+  if (pathname.startsWith('/evolution')) return TITLES['/evolution'];
+  return TITLES['/dashboard'];
+}
+
+function initials(name?: string): string {
+  if (!name) return '—';
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+}
+
+/**
+ * Icones do menu.
+ *
+ * Antes eram SVG escritos a mao, sem `stroke-linecap`/`stroke-linejoin`, o que
+ * deixava as pontas e as curvas tortas - estetoscopio, relatorio e
+ * configuracao. Usando o lucide, que ja e dependencia do projeto, todos os
+ * icones ficam com o mesmo desenho e o mesmo traco.
+ */
+const ICONES: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  Stethoscope,
+  Shield,
+  FileText,
+  HelpCircle,
+  Settings,
+};
+
+function Icon({ name }: { name: string }) {
+  const Desenho = ICONES[name] || Circle;
+  return <Desenho size={18} aria-hidden="true" />;
+}
+
 export function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { professional, logout, isAdmin } = useAuth();
-  const { sidebarOpen, toggleSidebar, setSidebarOpen } = useUI();
-  const { config, isDemo } = useConfig();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { openModal } = useUI();
+  const { config } = useConfig();
+  const { patientsFilter, setPatientsFilter } = useData();
+
+  const [title, subtitle] = useMemo(
+    () => resolveTitle(location.pathname, isAdmin),
+    [location.pathname, isAdmin]
+  );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    document.title = `${title} · ${config?.clinic?.name || config?.texts?.systemName || 'Clínica Psi'}`;
+  }, [title, config]);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
+  const homologacao = config?.homologacao === true;
+  const clinicName = config?.clinic?.name || config?.texts?.systemName || 'Clínica Psi';
+  const unit = config?.clinic?.unit || 'Unidade';
+  const acronym = (config?.brand?.acronym || 'CP').slice(0, 3);
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    navigate('/patients');
+  };
+
   return (
     <div className="app-layout">
-      {/* Sidebar */}
-      <aside
-        className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${!sidebarOpen ? 'hidden' : ''}`}
-        role="navigation"
-        aria-label="Menu principal"
-      >
-        <div className="sidebar-header">
-          <div className="sidebar-brand">
-            <div className="sidebar-logo">
-              <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="64" height="64" rx="14" className="brand-bg"/>
-                <text x="32" y="42" textAnchor="middle" className="brand-text">CP</text>
-              </svg>
-            </div>
-            {!sidebarCollapsed && (
-              <div className="sidebar-title">
-                <strong>{config?.clinic?.name || 'Clínica Psi'}</strong>
-                <span>{config?.clinic?.unit || 'Unidade'}</span>
-              </div>
-            )}
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="logo logo-sm">{acronym}</div>
+          <div className="sidebar-title">
+            <strong>{clinicName}</strong>
+            <span>{unit}</span>
           </div>
-          <button
-            className="sidebar-toggle"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? 'Expandir menu' : 'Colapsar menu'}
-          >
-            {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-          </button>
         </div>
 
-        <nav className="sidebar-nav" aria-label="Navegação principal">
-          <ul>
-            {NAV_ITEMS.map((item) => (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                  title={item.label}
-                >
-                  <Icon name={item.icon} className="w-5 h-5" />
-                  {!sidebarCollapsed && <span>{item.label}</span>}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+        <nav className="nav" aria-label="Navegação principal">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              <span className="nav-ico">
+                <Icon name={item.icon} />
+              </span>
+              {item.label}
+            </NavLink>
+          ))}
 
-          {isAdmin && (
-            <ul>
-              <li className="nav-divider" role="separator" />
-              <li>
-                <NavLink
-                  to={ADMIN_NAV.path}
-                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                  title={ADMIN_NAV.label}
-                >
-                  <Icon name={ADMIN_NAV.icon} className="w-5 h-5" />
-                  {!sidebarCollapsed && <span>{ADMIN_NAV.label}</span>}
-                </NavLink>
-              </li>
-            </ul>
-          )}
+          <NavLink
+            to={ADMIN_NAV.path}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-ico">
+              <Icon name={ADMIN_NAV.icon} />
+            </span>
+            {ADMIN_NAV.label}
+          </NavLink>
         </nav>
 
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <div className="user-avatar">
-              {professional?.name?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            {!sidebarCollapsed && (
-              <div className="user-details">
-                <strong>{professional?.name}</strong>
-                <span>{professional?.crp}</span>
-              </div>
-            )}
+        <div className="sidebar-user">
+          <div className="avatar">{initials(professional?.name)}</div>
+          <div className="sidebar-user-info">
+            <strong>{professional?.name || '—'}</strong>
+            <span>{professional?.role || professional?.crp || '—'}</span>
           </div>
           <button
-            className="logout-btn"
+            className="btn btn-ghost btn-icon"
             onClick={handleLogout}
             title="Sair"
             aria-label="Sair do sistema"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </aside>
+      {sidebarOpen && <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
 
-      {/* Mobile overlay */}
-      <div
-        className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
-        onClick={() => setSidebarOpen(false)}
-        aria-hidden="true"
-      />
-
-      {/* Main content */}
-      <main className="main-content" role="main">
+      <main className="main-content">
+        {homologacao && (
+          <div className="homologacao-bar" role="status">
+            <span className="demo-badge">Homologação</span>
+            <span>
+              Ambiente de teste: os acessos de demonstração foram removidos. Pode apagar e recriar
+              dados livremente em <strong>Configurações › Dados</strong>, mas não use pacientes reais.
+            </span>
+          </div>
+        )}
         <header className="topbar">
-          <button className="mobile-menu-btn" onClick={toggleSidebar} aria-label="Abrir menu">
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-label={sidebarOpen ? 'Fechar menu' : 'Abrir menu'}
+            aria-expanded={sidebarOpen}
+          >
             <MenuIcon className="w-6 h-6" />
           </button>
 
-          <div className="topbar-search">
-            <input
-              type="search"
-              placeholder="Buscar paciente..."
-              className="search-input"
-              aria-label="Buscar paciente"
-            />
+          <div>
+            <h1>{title}</h1>
+            <p className="muted">{subtitle}</p>
           </div>
 
           <div className="topbar-actions">
-            {isDemo && (
-              <span className="demo-badge">Modo Demonstração</span>
-            )}
+            <button className="btn btn-primary" onClick={() => openModal('new-patient')}>
+              + Novo paciente
+            </button>
+            <form className="search" onSubmit={submitSearch} role="search">
+              <input
+                type="search"
+                value={patientsFilter.search}
+                onChange={(e) => setPatientsFilter({ search: e.target.value })}
+                placeholder="Buscar paciente pelo nome ou telefone…"
+                aria-label="Buscar paciente pelo nome ou telefone"
+              />
+            </form>
           </div>
         </header>
 
-        <Outlet />
+        <div className="content">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
-}
-
-// Dynamic icon component
-function Icon({ name, className }: { name: string; className?: string }) {
-  const icons: Record<string, ReactElement> = {
-    LayoutDashboard: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
-    Users: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-    Calendar: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
-    Stethoscope: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 2v2"/><path d="M5.17 21 4 18"/><path d="M20 4 18.81 4.72"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36"/><path d="M10.37 20.63a9 9 0 0 1 0-12.54"/><path d="M18 10a4 4 0 0 1-4 4h-1"/></svg>,
-    Shield: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-    FileText: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2v6h6"/><path d="M16 22H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h11"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>,
-    Settings: <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 1 4.6 9a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 1 1.51-1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-  };
-
-  return icons[name] || <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>;
 }

@@ -1,0 +1,307 @@
+/**
+ * DataService - backup, restauracao e manutencao dos dados locais.
+ *
+ * O `LocalStorageAdapter.exportBackup()` le a chave 'db', que nao existe
+ * neste app: cada colecao mora na sua propria chave `clinica-psi-*`. Por isso
+ * o backup e montado aqui, chave a chave.
+ */
+
+import { storage } from '../adapters';
+import {
+  appointmentRepository,
+  configRepository,
+  consentRepository,
+  evolutionRepository,
+  patientRepository,
+  professionalRepository,
+  serviceRepository,
+} from '../repositories';
+import type { Evolution } from '../domain/types';
+import { seedDemoData } from './bootstrap';
+
+const PREFIX = 'clinica-psi-';
+
+/** Identidade e equipe nao sao dados clinicos e sobrevivem a uma limpeza. */
+export type ColecaoKey =
+  | 'patients'
+  | 'evolutions'
+  | 'appointments'
+  | 'consents'
+  | 'services'
+  | 'professionals';
+
+export const COLECIONES_CLINICAS: ColecaoKey[] = [
+  'patients',
+  'evolutions',
+  'appointments',
+  'consents',
+  'services',
+];
+
+export const LOGO_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+export const LOGO_MAX_BYTES = 200 * 1024;
+
+export interface BackupFile {
+  nome: string;
+  conteudo: string;
+  geradoEm: string;
+  contagens: Record<ColecaoKey, number>;
+}
+
+export interface UsoArmazenamento {
+  bytes: number;
+  logoBytes: number;
+  percentual: number;
+  limite: number;
+}
+
+function todasAsChaves(): string[] {
+  if (typeof localStorage === 'undefined') return [];
+  return Object.keys(localStorage).filter((k) => k.startsWith(PREFIX));
+}
+
+function semPrefixo(key: string): string {
+  return key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
+}
+
+export async function contagens(): Promise<Record<ColecaoKey, number>> {
+  const [patients, evolutions, appointments, consents, services, professionals] = await Promise.all([
+    patientRepository.count(),
+    evolutionRepository.count(),
+    appointmentRepository.count(),
+    consentRepository.count(),
+    serviceRepository.count(),
+    professionalRepository.count(),
+  ]);
+  return { patients, evolutions, appointments, consents, services, professionals };
+}
+
+export async function usoArmazenamento(): Promise<UsoArmazenamento> {
+  let bytes = 0;
+  let logoBytes = 0;
+
+  for (const key of todasAsChaves()) {
+    const valor = localStorage.getItem(key) || '';
+    bytes += valor.length;
+    if (semPrefixo(key) === 'config') {
+      try {
+        const logo = JSON.parse(valor)?.brand?.logo;
+        if (typeof logo === 'string') logoBytes = logo.length;
+      } catch {
+        // config invalida: ignora no calculo do logo
+      }
+    }
+  }
+
+  const limite = 5 * 1024 * 1024;
+  return {
+    bytes,
+    logoBytes,
+    percentual: Math.min(100, Math.round((bytes / limite) * 100)),
+    limite,
+  };
+}
+
+export async function exportarBackup(): Promise<BackupFile> {
+  const dados: Record<string, unknown> = {};
+  for (const key of todasAsChaves()) dados[semPrefixo(key)] = JSON.parse(localStorage.getItem(key) || 'null');
+
+  // A identidade so existe no storage depois que alguem salva algo em
+  // Configuracoes: num sistema novo a chave nao esta la, e o `importarBackup`
+  // recusa o arquivo por faltar a identidade da clinica. Um backup precisa
+  // ser auto-suficiente, entao a config resolvida entra sempre no arquivo.
+  dados.config = await configRepository.get();
+
+  const geradoEm = new Date().toISOString();
+  return {
+    nome: `clinica-psi-backup-${geradoEm.slice(0, 10)}-${geradoEm.slice(11, 19).replace(/:/g, '')}.json`,
+    conteudo: JSON.stringify({ app: 'clinica-psi', versao: 1, geradoEm, dados }, null, 2),
+    geradoEm,
+    contagens: await contagens(),
+  };
+}
+
+export function baixarBackup(backup: BackupFile): void {
+  const blob = new Blob([backup.conteudo], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = backup.nome;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/**
+ * Restaura um backup. Substitui tudo: pacientes, equipe, servicos, agenda e
+ * termos. Valida antes de gravar para nao deixar o app sem identificacao.
+ */
+export async function importarBackup(texto: string): Promise<{ ok: boolean; erro?: string; resumo?: string }> {
+  let bruto: unknown;
+  try {
+    bruto = JSON.parse(texto);
+  } catch {
+    return { ok: false, erro: 'Arquivo inválido: o conteúdo não é um JSON válido.' };
+  }
+
+  const dados = (bruto as { dados?: Record<string, unknown> })?.dados;
+  if (!dados || typeof dados !== 'object') {
+    return { ok: false, erro: 'Arquivo inválido: não parece um backup deste sistema.' };
+  }
+  if (!dados.config || !Array.isArray(dados.professionals) || (dados.professionals as unknown[]).length === 0) {
+    return { ok: false, erro: 'Arquivo inválido: faltam a identidade da clínica ou a equipe.' };
+  }
+
+  try {
+    for (const chave of Object.keys(dados)) {
+      await storage.set(chave, dados[chave]);
+    }
+    // chaves que nao vieram no backup nao podem sobrar
+    for (const key of todasAsChaves()) {
+      const nome = semPrefixo(key);
+      if (!(nome in dados)) localStorage.removeItem(key);
+    }
+  } catch (e) {
+    console.error('Failed to import backup:', e);
+    return { ok: false, erro: 'Não foi possível gravar o backup neste navegador.' };
+  }
+
+  const clinica =
+    (dados.config as { clinic?: { name?: string } } | undefined)?.clinic?.name || 'clinic sem nome';
+  return { ok: true, resumo: clinica };
+}
+
+/** Apaga os dados clínicos mantendo identidade, equipe e o acesso do usuário. */
+export async function limparDadosClinicos(): Promise<Record<ColecaoKey, number>> {
+  const antes = await contagens();
+  for (const chave of COLECIONES_CLINICAS) await storage.set(chave, []);
+  return antes;
+}
+
+/** Apaga tudo e recria a clinica de demonstracao. */
+export async function restaurarDemonstracao(): Promise<void> {
+  for (const key of todasAsChaves()) localStorage.removeItem(key);
+  await seedDemoData();
+}
+
+export function validarLogo(arquivo: { type: string; size: number }): string {
+  if (LOGO_MIME.indexOf(arquivo.type) === -1) {
+    return 'Formato não suportado. Use PNG, JPG, WebP ou SVG.';
+  }
+  if (arquivo.size > LOGO_MAX_BYTES) {
+    return `Imagem muito grande (máximo ${Math.round(LOGO_MAX_BYTES / 1024)} KB).`;
+  }
+  return '';
+}
+
+export function lerArquivoComoDataUrl(arquivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result || ''));
+    leitor.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+export function lerArquivoComoTexto(arquivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result || ''));
+    leitor.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
+    leitor.readAsText(arquivo);
+  });
+}
+
+/**
+ * Exporta so o que o profissional registrou: os pacientes em que ele tem
+ * evolucao e as evolucoes que ele escreveu.
+ *
+ * E o recorte da LGPD para o titular: um arquivo legivel, com o conteudo das
+ * evolucoes em texto (o storage guarda HTML congelado) e sem o dado de acesso
+ * dos outros profissionais.
+ */
+export async function exportarDadosDoProfissional(
+  professionalId: string
+): Promise<{ nome: string; resumo: string; texto: string }> {
+  const [evolutions, patients, consents] = await Promise.all([
+    evolutionRepository.findByProfessional(professionalId),
+    patientRepository.findAll(),
+    consentRepository.findAll(),
+  ]);
+
+  const meus = evolutions.filter((e) => e.professionalId === professionalId);
+  const porPaciente = new Map<string, Evolution[]>();
+  for (const e of meus) {
+    const lista = porPaciente.get(e.patientId) || [];
+    lista.push(e);
+    porPaciente.set(e.patientId, lista);
+  }
+
+  const consentimentosDoProfissional = consents.filter((c) => c.registeredBy === professionalId);
+  const agora = new Date();
+  const carimbo = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+
+  const partes: string[] = [
+    'DADOS REGISTRADOS POR MIM',
+    `Exportado em ${agora.toLocaleString('pt-BR')}`,
+    `Total: ${porPaciente.size} paciente(s), ${meus.length} evolução(ões), ${consentimentosDoProfissional.length} termo(s).`,
+    '',
+  ];
+
+  for (const [patientId, lista] of porPaciente) {
+    const paciente = patients.find((p) => p.id === patientId);
+    partes.push('='.repeat(64));
+    partes.push(`PACIENTE: ${paciente?.name || '—'}`);
+    if (paciente?.birthDate) partes.push(`NASCIMENTO: ${new Date(paciente.birthDate).toLocaleDateString('pt-BR')}`);
+    if (paciente?.document) partes.push(`DOCUMENTO: ${paciente.document}`);
+    partes.push('');
+
+    for (const evo of lista) {
+      partes.push(`--- ${evo.title} (${new Date(evo.date).toLocaleDateString('pt-BR')}) ---`);
+      // o storage guarda HTML; o arquivo precisa sair legível
+      partes.push(htmlParaTexto(evo.content));
+      partes.push('');
+    }
+  }
+
+  if (porPaciente.size === 0) {
+    partes.push('Nenhuma evolução registrada por este profissional até o momento.');
+  }
+
+  const texto = partes.join('\n');
+  return {
+    nome: `clinica-psi-meus-dados-${carimbo}.txt`,
+    resumo: `${porPaciente.size} paciente(s) e ${meus.length} evolução(ões)`,
+    texto,
+  };
+}
+
+/** Baixa um texto qualquer como arquivo. */
+export function baixarTexto(nome: string, texto: string): void {
+  const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Tira a marcação das evoluções, que são gravadas como HTML. */
+function htmlParaTexto(html: string): string {
+  const comQuebras = String(html || '')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ');
+  const semTag = comQuebras.replace(/<[^>]*>/g, '');
+  const texto = semTag
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"');
+  return texto.replace(/\n{3,}/g, '\n\n').trim();
+}

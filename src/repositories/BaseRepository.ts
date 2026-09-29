@@ -21,6 +21,13 @@ export interface PaginatedResult<T> {
   totalPages: number;
 }
 
+/**
+ * Entrada de criacao: id/createdAt/updatedAt sao gerados pelo repositorio,
+ * mas aceitos para permitir seeds deterministicos.
+ */
+export type CreateInput<T> = Omit<T, 'id' | 'createdAt' | 'updatedAt'> &
+  Partial<Record<'id' | 'createdAt' | 'updatedAt', unknown>>;
+
 export abstract class BaseRepository<T extends { id: string }> {
   protected abstract storageKey: string;
   protected abstract entityName: string;
@@ -103,7 +110,7 @@ export abstract class BaseRepository<T extends { id: string }> {
     return this.applyWhere(collection, where)[0] || null;
   }
 
-  async create(entity: Omit<T, 'id'> & Partial<Pick<T, 'id'>>): Promise<T> {
+  async create(entity: CreateInput<T>): Promise<T> {
     const collection = await this.readCollection();
     const now = new Date().toISOString();
 
@@ -159,7 +166,7 @@ export abstract class BaseRepository<T extends { id: string }> {
   }
 
   // Batch operations
-  async createMany(entities: (Omit<T, 'id'> & Partial<Pick<T, 'id'>>)[]): Promise<T[]> {
+  async createMany(entities: CreateInput<T>[]): Promise<T[]> {
     const collection = await this.readCollection();
     const now = new Date().toISOString();
 

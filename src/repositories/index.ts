@@ -9,4 +9,4 @@ export { ServiceRepository, serviceRepository } from './ServiceRepository';
 export { AppointmentRepository, appointmentRepository } from './AppointmentRepository';
 export { EvolutionRepository, evolutionRepository } from './EvolutionRepository';
 export { ConsentRepository, consentRepository } from './ConsentRepository';
-export { ConfigRepository, configRepository } from './ConfigRepository';
+export { ConfigRepository, configRepository, DEFAULT_CONSENT_MODELS } from './ConfigRepository';

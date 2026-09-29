@@ -19,19 +19,23 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: clinica-react/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+        working-directory: ./clinica-react
 
       - name: TypeScript check
         run: npm run lint
+        working-directory: ./clinica-react
 
       - name: Build
         run: npm run build
+        working-directory: ./clinica-react
 
       - name: Run tests
         run: npm run test:all
+        working-directory: ./clinica-react
         continue-on-error: true
 
   build:
@@ -48,17 +52,19 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: clinica-react/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+        working-directory: ./clinica-react
 
       - name: Build production
         run: npm run build
+        working-directory: ./clinica-react
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist
+          path: clinica-react/dist
           retention-days: 7
